@@ -136,28 +136,39 @@ $dbh->{'PrintError'} = 1;
 if ($DB{'type'} eq "mysql") {
     my $index_type = lc($OPT{'index-type'} || '');
 
-    # Default to sphinx on < 5.6, and error if they provided mysql
+    my $default;
     my $msg;
     if ($RT::Handle->dbh->{mysql_serverversion} < 50600) {
-        $msg = "Complete support for full-text search requires MySQL 5.6 or higher.  For prior\n"
-              ."versions such as yours, full-text indexing can either be provided using MyISAM\n"
-              ."tables, or the external Sphinx indexer.  Using MyISAM tables requires that your\n"
-              ."database be tuned to support them, as RT uses InnoDB tables for all other content.\n"
-              ."Using Sphinx will require recompiling MySQL.  Which indexing solution would you\n"
-              ."prefer?"
+        $default = "myisam";
+        $msg = "Complete support for full-text search requires MySQL 5.6 or higher, or MariaDB\n"
+              ."10.0 or higher. Prior versions, such as yours, can use MyISAM tables for full-text\n"
+              ."indexing. Using MyISAM tables requires tuning your database to support them, since\n"
+              ."RT uses InnoDB tables for all other content.\n"
+              ."\n"
+              ."RT also supports using the external Sphinx indexer with MySQL. You may need to\n"
+              ."recompile MySQL to use Sphinx.\n"
+              ."\n"
+              ."Select '$default' if you are using MariaDB.\n"
+              ."\n"
+              ."Which indexing solution would you prefer? {$default|sphinx}";
     } else {
-        $msg = "MySQL 5.6 and above support native full-text indexing; for compatibility\n"
-              ."with earlier versions of RT, the external Sphinx indexer is still supported.\n"
-              ."Which indexing solution would you prefer?"
+        $default = "native";
+        $msg = "MySQL 5.6 and above, and MariaDB 10.0 and above, support native full-text indexing.\n"
+              ."For compatibility with earlier versions of RT, the external Sphinx indexer is\n"
+              ."still supported only on MySQL. Select $default indexing if you are using MariaDB.\n"
+              ."\n"
+              ."Which indexing solution would you prefer? {$default|sphinx}";
     }
 
-    while ( $index_type ne 'sphinx' and $index_type ne 'mysql' ) {
+    while ( $index_type ne 'sphinx' and $index_type ne $default ) {
         $index_type = lc prompt(
             message => $msg,
-            default => 'mysql',
+            default => $default,
             silent  => !$OPT{'ask'},
         );
     };
+
+    $index_type = 'mysql' if $index_type eq $default;
     $DB{'type'} = $index_type;
 }
 
@@ -165,7 +176,7 @@ if ( $DB{'type'} eq 'mysql' ) {
     # MySQL 5.6 has FTS on InnoDB "text" columns -- which the
     # Attachments table doesn't have, but we can make it have.
     my $table = $OPT{'table'} || prompt(
-        message => "Enter the name of a new MySQL table that will be used to store the\n"
+        message => "Enter the name of a new MySQL or MariaDB table that will be used to store the\n"
                  . "full-text content and indexes:",
         default => $DEFAULT{'table'},
         silent  => !$OPT{'ask'},
@@ -187,7 +198,7 @@ if ( $DB{'type'} eq 'mysql' ) {
 } elsif ($DB{'type'} eq 'sphinx') {
     check_sphinx();
     my $table = $OPT{'table'} || prompt(
-        message => "Enter name of a new MySQL table that will be used to connect to the\n"
+        message => "Enter name of a new MySQL or MariaDB table that will be used to connect to the\n"
                  . "Sphinx server:",
         default => $DEFAULT{'table'},
         silent  => !$OPT{'ask'},
